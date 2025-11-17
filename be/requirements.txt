@@ -1,0 +1,6 @@
+Django>=5.2
+psycopg2-binary
+PyJWT
+djangorestframework
+djangorestframework
+django-cors-headers
