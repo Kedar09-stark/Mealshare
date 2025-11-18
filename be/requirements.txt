@@ -4,3 +4,6 @@ PyJWT
 djangorestframework
 djangorestframework
 django-cors-headers
+# Server-side python-socketio (core package) and ASGI server for websockets
+python-socketio==5.9.0
+uvicorn[standard]

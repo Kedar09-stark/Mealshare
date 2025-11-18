@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'donations',
+
+    # custom messages app (use AppConfig path)
+    'messages.apps.MessagesConfig',
 ]
 
 MIDDLEWARE = [
@@ -79,9 +82,10 @@ WSGI_APPLICATION = 'mealshare.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# Use PostgreSQL exclusively. Credentials can be supplied via environment variables.
 DATABASES = {
     'default': {
-        'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.postgresql'),
+        'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get('DB_NAME', 'Mealshare'),
         'USER': os.environ.get('DB_USER', 'postgres'),
         'PASSWORD': os.environ.get('DB_PASSWORD', 'root'),

@@ -98,8 +98,22 @@ class LoginView(APIView):
 		if not all([username, password]):
 			return Response({'error': 'username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
 
+		# Attempt authentication and provide debug output in server logs when login fails
 		user = authenticate(request, username=username, password=password)
 		if user is None:
+			# debug: check if user exists and whether the password check passes
+			from django.contrib.auth import get_user_model
+			UserModel = get_user_model()
+			try:
+				exists = UserModel.objects.filter(username=username).exists()
+				exists_msg = 'exists' if exists else 'not found'
+				print(f"Login attempt: username={username!r} -> {exists_msg}")
+				if exists:
+					u = UserModel.objects.filter(username=username).first()
+					pw_ok = u.check_password(password)
+					print(f"Password check for {username!r}: {pw_ok}")
+			except Exception as e:
+				print('Login debug error:', e)
 			return Response({'error': 'invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 		token = _make_token(user)
@@ -114,3 +128,15 @@ class UserView(APIView):
 	def get(self, request):
 		user: User = request.user
 		return Response({'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': user.role}})
+
+
+class UserDetailView(APIView):
+	authentication_classes = [JWTAuthentication]
+	permission_classes = [permissions.IsAuthenticated]
+
+	def get(self, request, username):
+		try:
+			user = User.objects.get(username=username)
+			return Response({'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': user.role}}, status=status.HTTP_200_OK)
+		except User.DoesNotExist:
+			return Response({'error': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
