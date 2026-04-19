@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Donation } from '../../App';
 import { MapPin, Clock } from 'lucide-react';
 import { API_BASE, authHeader } from '../../lib/auth';
+import { formatFoodItems } from '../../lib/utils';
 import { toast } from 'sonner';
 
 // Helper to safely display reservedBy (object or string)
@@ -43,7 +44,19 @@ export function MyDonationsView({ donations: initialDonations, updateDonation }:
       const data = await res.json();
       // expect array of donations in snake_case from backend; map to frontend shape
       const mapServer = (d: any) => {
-        const loc = d.location ?? d.location_json ?? { address: '', coordinates: { lat: 0, lng: 0 } };
+        let loc = d.location ?? d.location_json ?? { address: '', coordinates: { lat: 0, lng: 0 } };
+        // Validate and sanitize coordinates
+        if (loc && typeof loc === 'object' && loc.coordinates) {
+          const lat = typeof loc.coordinates.lat === 'number' ? loc.coordinates.lat : 0;
+          const lng = typeof loc.coordinates.lng === 'number' ? loc.coordinates.lng : 0;
+          loc = {
+            address: loc.address || '',
+            coordinates: {
+              lat: isNaN(lat) ? 0 : lat,
+              lng: isNaN(lng) ? 0 : lng
+            }
+          };
+        }
         return {
           id: d.id?.toString() ?? Date.now().toString(),
           hotelName: d.hotel_name ?? d.hotelName ?? '',
@@ -126,7 +139,7 @@ export function MyDonationsView({ donations: initialDonations, updateDonation }:
         <div className="flex justify-between items-start mb-2">
           <div className="flex-1">
             <CardTitle className="text-lg text-gray-900 font-semibold">{donation.hotelName ?? ''}</CardTitle>
-            <CardDescription className="text-gray-500">{donation.foodItems}</CardDescription>
+            <CardDescription className="text-gray-500">{formatFoodItems(donation.foodItems)}</CardDescription>
           </div>
         </div>
         <Badge className={getStatusColor(donation.status)}>
@@ -137,7 +150,7 @@ export function MyDonationsView({ donations: initialDonations, updateDonation }:
         <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
           <img 
             src={donation.imageUrl} 
-            alt={donation.foodItems}
+            alt={formatFoodItems(donation.foodItems)}
             className="w-full h-full object-cover"
           />
         </div>

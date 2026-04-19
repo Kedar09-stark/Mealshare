@@ -13,12 +13,17 @@ interface AuthFormProps {
   setName?: (v: string) => void;
   confirmPassword?: string;
   setConfirmPassword?: (v: string) => void;
+  businessLicenseNumber?: string;
+  setBusinessLicenseNumber?: (v: string) => void;
+  ngoRegistrationNumber?: string;
+  setNgoRegistrationNumber?: (v: string) => void;
+  role?: string;
   submitLabel: string;
   onSubmit: () => void;
   loading?: boolean;
 }
 
-export function AuthForm({ email, setEmail, password, setPassword, username, setUsername, name, setName, confirmPassword, setConfirmPassword, submitLabel, onSubmit, loading }: AuthFormProps) {
+export function AuthForm({ email, setEmail, password, setPassword, username, setUsername, name, setName, confirmPassword, setConfirmPassword, businessLicenseNumber, setBusinessLicenseNumber, ngoRegistrationNumber, setNgoRegistrationNumber, role, submitLabel, onSubmit, loading }: AuthFormProps) {
   return (
     <form
       onSubmit={(e) => {
@@ -45,6 +50,20 @@ export function AuthForm({ email, setEmail, password, setPassword, username, set
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
           <Input type="email" value={email ?? ''} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.org" />
+        </div>
+      )}
+
+      {role === 'hotel' && setBusinessLicenseNumber && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Business License Number</label>
+          <Input value={businessLicenseNumber} onChange={(e) => setBusinessLicenseNumber(e.target.value)} placeholder="e.g. BLN-123456" />
+        </div>
+      )}
+
+      {role === 'ngo' && setNgoRegistrationNumber && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">NGO Registration Number</label>
+          <Input value={ngoRegistrationNumber} onChange={(e) => setNgoRegistrationNumber(e.target.value)} placeholder="e.g. NGO-123456" />
         </div>
       )}
 

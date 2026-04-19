@@ -1,78 +1,114 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import authentication
+from accounts.views import JWTAuthentication
 from .models import Message
 from .serializers import MessageSerializer
-from accounts.views import JWTAuthentication
 import time
 
-# Simple in-memory per-user-room cache to avoid responding to very frequent identical requests
-# Keyed by (username, room) for room-history requests and by username for inbox requests.
-# This is intentionally simple for dev; for production use a proper cache (redis/memcached).
+# Simple in-memory cache
 _LAST_FETCH_CACHE = {}
 _CACHE_COOLDOWN_SECONDS = 1.0
 
 
+def parse_room(room: str):
+    """
+    Parse room name: chat_user1_user2
+    Returns (user1, user2) or (None, None) if invalid
+    """
+    try:
+        prefix, u1, u2 = room.split('_', 2)
+        if prefix != 'chat':
+            return None, None
+        return u1.strip(), u2.strip()
+    except Exception:
+        return None, None
+
+
+def is_user_in_room(room: str, username: str):
+    u1, u2 = parse_room(room)
+    return username in [u1, u2]
+
+
 class MessageListView(APIView):
-	# Accept JWT Bearer tokens issued by our accounts app
-	authentication_classes = [JWTAuthentication]
-	permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
-	def get(self, request):
-		room = request.query_params.get('room')
-		# Debug: log who's requesting and what room
-		try:
-			user_info = getattr(request.user, 'username', None)
-		except Exception:
-			user_info = None
-		print(f"MessageList requested by user={user_info!r} for room={room!r}")
+    def get(self, request):
+        room = request.query_params.get('room')
+        user = request.user
+        username = getattr(user, 'username', None)
 
-		# If a specific room is requested, return messages in that room
-		if room:
-			cache_key = (user_info or 'anonymous', room)
-			now = time.time()
-			cached = _LAST_FETCH_CACHE.get(cache_key)
-			# If cached and within cooldown, return cached response to avoid rapid repeated DB queries
-			if cached and (now - cached['ts'] < _CACHE_COOLDOWN_SECONDS):
-				print(f"Returning cached history for {cache_key} (age={now-cached['ts']:.2f}s)")
-				return Response(cached['data'])
+        print(f"[MessageList] user={username!r}, room={room!r}")
 
-			msgs = Message.objects.filter(room=room).order_by('timestamp')
-			print(f"Found {msgs.count()} messages for room={room!r}")
-			serializer = MessageSerializer(msgs, many=True)
-			# store in cache
-			try:
-				_LAST_FETCH_CACHE[cache_key] = {'ts': now, 'data': serializer.data}
-			except Exception:
-				pass
-			return Response(serializer.data)
+        # =========================
+        # 📌 CASE 1: ROOM HISTORY
+        # =========================
+        if room:
+            # Validate room
+            u1, u2 = parse_room(room)
+            if not u1 or not u2:
+                return Response({"error": "Invalid room format"}, status=400)
 
-		# No room provided: return a list of latest messages (one per room)
-		# Find rooms where the user is a participant (room name includes username)
-		# No room provided: return a list of latest messages (one per room)
-		# Use a per-user inbox cache to reduce frequent identical inbox requests.
-		cache_key = (user_info or 'anonymous', 'inbox')
-		now = time.time()
-		cached = _LAST_FETCH_CACHE.get(cache_key)
-		if cached and (now - cached['ts'] < _CACHE_COOLDOWN_SECONDS):
-			print(f"Returning cached inbox for user={user_info!r} (age={now-cached['ts']:.2f}s)")
-			return Response(cached['data'])
+            if username not in [u1, u2]:
+                return Response({"error": "Unauthorized for this room"}, status=403)
 
-		if user_info:
-			rooms = Message.objects.filter(room__icontains=user_info).values_list('room', flat=True).distinct()
-		else:
-			rooms = Message.objects.values_list('room', flat=True).distinct()
-		latest = []
-		for r in rooms:
-			m = Message.objects.filter(room=r).order_by('-timestamp').first()
-			if m:
-				latest.append(m)
-		print(f"Returning {len(latest)} latest messages for inbox for user={user_info!r}")
-		serializer = MessageSerializer(latest, many=True)
-		try:
-			_LAST_FETCH_CACHE[cache_key] = {'ts': now, 'data': serializer.data}
-		except Exception:
-			pass
-		return Response(serializer.data)
+            cache_key = (username, room)
+            now = time.time()
+            cached = _LAST_FETCH_CACHE.get(cache_key)
 
+            if cached and (now - cached['ts'] < _CACHE_COOLDOWN_SECONDS):
+                print(f"Returning cached history for {room}")
+                return Response(cached['data'])
+
+            msgs = Message.objects.filter(room=room).order_by('timestamp')
+            print(f"Fetched {msgs.count()} messages for room={room}")
+
+            serializer = MessageSerializer(msgs, many=True)
+
+            _LAST_FETCH_CACHE[cache_key] = {
+                'ts': now,
+                'data': serializer.data
+            }
+
+            return Response(serializer.data)
+
+        # =========================
+        # 📌 CASE 2: INBOX (LATEST PER ROOM)
+        # =========================
+        cache_key = (username, 'inbox')
+        now = time.time()
+        cached = _LAST_FETCH_CACHE.get(cache_key)
+
+        if cached and (now - cached['ts'] < _CACHE_COOLDOWN_SECONDS):
+            print(f"Returning cached inbox for {username}")
+            return Response(cached['data'])
+
+        # Get all unique rooms
+        all_rooms = Message.objects.values_list('room', flat=True).distinct()
+
+        valid_rooms = []
+        for r in all_rooms:
+            u1, u2 = parse_room(r)
+            if not u1 or not u2:
+                continue  # skip invalid rooms
+            if username in [u1, u2]:
+                valid_rooms.append(r)
+
+        latest_messages = []
+
+        for r in valid_rooms:
+            msg = Message.objects.filter(room=r).order_by('-timestamp').first()
+            if msg:
+                latest_messages.append(msg)
+
+        print(f"Inbox rooms count: {len(latest_messages)}")
+
+        serializer = MessageSerializer(latest_messages, many=True)
+
+        _LAST_FETCH_CACHE[cache_key] = {
+            'ts': now,
+            'data': serializer.data
+        }
+
+        return Response(serializer.data)

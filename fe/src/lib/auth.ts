@@ -47,7 +47,7 @@ export async function apiLogin(username: string, password: string) {
   return res.json();
 }
 
-export async function apiRegister(payload: { username: string; email?: string; password: string; role: string; }) {
+export async function apiRegister(payload: { username: string; email?: string; password: string; role: string; businessLicenseNumber?: string; ngoRegistrationNumber?: string; }) {
   const res = await fetch(`${API_BASE}/api/register/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

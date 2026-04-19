@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Donation, Message } from '../../App';
 import { API_BASE, authHeader, getCurrentUser } from '../../lib/auth';
+import { formatFoodItems } from '../../lib/utils';
 import { QualityBadge } from '../QualityBadge';
 
 interface DashboardViewProps {
@@ -26,7 +27,22 @@ export function DashboardView({ donations, messages }: DashboardViewProps) {
         if (dRes.ok) {
           const data = await dRes.json();
           const mapped: Donation[] = (Array.isArray(data) ? data : []).map((d: any) => {
-            const loc = typeof d.location === 'string' ? { address: d.location, coordinates: { lat: 0, lng: 0 } } : (d.location ?? { address: '', coordinates: { lat: 0, lng: 0 } });
+            let loc: { address: string; coordinates: { lat: number; lng: number } };
+            if (typeof d.location === 'string') {
+              loc = { address: d.location, coordinates: { lat: 0, lng: 0 } };
+            } else if (d.location && typeof d.location === 'object') {
+              const lat = typeof d.location.coordinates?.lat === 'number' ? d.location.coordinates.lat : 0;
+              const lng = typeof d.location.coordinates?.lng === 'number' ? d.location.coordinates.lng : 0;
+              loc = {
+                address: d.location.address || '',
+                coordinates: {
+                  lat: isNaN(lat) ? 0 : lat,
+                  lng: isNaN(lng) ? 0 : lng
+                }
+              };
+            } else {
+              loc = { address: '', coordinates: { lat: 0, lng: 0 } };
+            }
             return {
               id: String(d.id),
               hotelName: d.hotel_name ?? '',
@@ -51,14 +67,21 @@ export function DashboardView({ donations, messages }: DashboardViewProps) {
         const mRes = await fetch(`${API_BASE}/api/messages/`, { headers });
         if (mRes.ok) {
           const data = await mRes.json();
-          const mapped: Message[] = (Array.isArray(data) ? data : []).map((m: any) => ({
-            id: String(m.id),
-            from: m.sender_name ?? 'Unknown',
-            to: m.receiver_name ?? 'Unknown',
-            message: m.content ?? '',
-            timestamp: m.timestamp ?? new Date().toISOString(),
-            read: typeof m.is_read === 'boolean' ? m.is_read : !(m.receiver_name === myName),
-          }));
+          const seenIds = new Set<string>();
+          const mapped: Message[] = (Array.isArray(data) ? data : [])
+            .map((m: any) => ({
+              id: String(m.id),
+              from: m.sender_name ?? 'Unknown',
+              to: m.receiver_name ?? 'Unknown',
+              message: m.content ?? '',
+              timestamp: m.timestamp ?? new Date().toISOString(),
+              read: typeof m.is_read === 'boolean' ? m.is_read : !(m.receiver_name === myName),
+            }))
+            .filter((msg: Message) => {
+              if (seenIds.has(msg.id)) return false;
+              seenIds.add(msg.id);
+              return true;
+            });
           setLiveMessages(mapped);
         }
       } catch {}
@@ -138,9 +161,9 @@ export function DashboardView({ donations, messages }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="space-y-2">
             {urgentPickups.slice(0, 3).map(donation => (
-              <div key={donation.id} className="flex items-center justify-between p-3 bg-white rounded-lg">
+              <div key={`urgent-${donation.id}`} className="flex items-center justify-between p-3 bg-white rounded-lg">
                 <div className="flex-1">
-                  <p className="font-medium">{donation.foodItems}</p>
+                  <p className="font-medium">{formatFoodItems(donation.foodItems)}</p>
                   <p className="text-sm text-gray-600">{donation.hotelName}</p>
                 </div>
                 <Badge className="bg-orange-600 text-white">Urgent</Badge>
@@ -189,16 +212,16 @@ export function DashboardView({ donations, messages }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             {available.slice(0, 3).map(donation => (
-              <div key={donation.id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+              <div key={`available-${donation.id}`} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
                 <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                   <img 
                     src={donation.imageUrl} 
-                    alt={donation.foodItems}
+                    alt={formatFoodItems(donation.foodItems)}
                     className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{donation.foodItems}</p>
+                  <p className="font-medium truncate">{formatFoodItems(donation.foodItems)}</p>
                   <p className="text-sm text-gray-600">{donation.hotelName}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <QualityBadge score={donation.qualityScore} size="sm" />
@@ -220,7 +243,7 @@ export function DashboardView({ donations, messages }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="space-y-2">
             {unreadMessages.slice(0, 3).map(msg => (
-              <div key={msg.id} className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+              <div key={`message-${msg.id}`} className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="font-medium text-teal-900">{msg.from}</p>

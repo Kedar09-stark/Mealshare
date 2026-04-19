@@ -33,6 +33,45 @@ class Donation(models.Model):
 	owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='donations_created')
 	created_at = models.DateTimeField(auto_now_add=True)
 	image_url = models.TextField(blank=True, null=True)
+	rating = models.IntegerField(null=True, blank=True)
+	rating_comment = models.TextField(blank=True, null=True)
+
+	def clean(self):
+		"""Validate and normalize location coordinates before saving."""
+		if not self.location or not isinstance(self.location, dict):
+			self.location = {'address': '', 'coordinates': {'lat': 0, 'lng': 0}}
+			return
+		
+		address = self.location.get('address', '')
+		coords = self.location.get('coordinates', {})
+		
+		if not isinstance(coords, dict):
+			coords = {'lat': 0, 'lng': 0}
+		
+		lat = coords.get('lat', 0)
+		lng = coords.get('lng', 0)
+		
+		# Validate and normalize coordinates
+		try:
+			import math
+			lat = float(lat) if lat is not None else 0
+			lng = float(lng) if lng is not None else 0
+			# Check for NaN
+			if math.isnan(lat) or math.isnan(lng):
+				lat, lng = 0, 0
+		except (TypeError, ValueError):
+			lat, lng = 0, 0
+		
+		# Update location with validated coordinates
+		self.location = {
+			'address': str(address) if address else '',
+			'coordinates': {'lat': lat, 'lng': lng}
+		}
+
+	def save(self, *args, **kwargs):
+		"""Ensure coordinates are valid before saving."""
+		self.clean()
+		super().save(*args, **kwargs)
 
 	def __str__(self):
 		return f"{self.hotel_name} - {self.category} ({self.quantity})"

@@ -13,6 +13,8 @@ class User(AbstractUser):
 	]
 
 	role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+	business_license_number = models.CharField(max_length=255, blank=True, null=True)
+	ngo_registration_number = models.CharField(max_length=255, blank=True, null=True)
 
 	def __str__(self):
 		return f"{self.username} ({self.role})"

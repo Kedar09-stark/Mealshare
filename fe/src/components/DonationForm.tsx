@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Donation } from '../App';
 import { LocationPicker } from './LocationPicker';
-import { API_BASE, authHeader, getUser } from '../lib/auth';
+import { API_BASE, authHeader, getUser ,getToken } from '../lib/auth';
+
 
 interface DonationFormProps {
   onSubmit: (donation: Donation) => void;
@@ -32,6 +33,8 @@ const IMAGE_URLS = [
 ];
 
 export function DonationForm({ onSubmit, onCancel }: DonationFormProps) {
+  const [foodItems, setFoodItems] = useState<string[]>([]);
+  const [currentItem, setCurrentItem] = useState('');
   const [formData, setFormData] = useState({
     hotelName: '',
     foodItems: '',
@@ -41,8 +44,10 @@ export function DonationForm({ onSubmit, onCancel }: DonationFormProps) {
     location: {
       address: '',
       coordinates: { lat: 40.7128, lng: -74.0060 }
+
     }
-  });
+  }
+);
 
   const [showLocationPicker, setShowLocationPicker] = useState(false);
 
@@ -59,34 +64,50 @@ export function DonationForm({ onSubmit, onCancel }: DonationFormProps) {
       return;
     }
 
-    if (!formData.hotelName || !formData.foodItems || !formData.quantity || 
-        !formData.category || !formData.expiryDate || !formData.location.address) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
+   if (
+  !formData.hotelName ||
+  foodItems.length === 0 ||
+  !formData.quantity ||
+  !formData.category ||
+  !formData.expiryDate ||
+  !formData.location.address
+) {
+  toast.error('Please fill in all required fields');
+  return;
+}
 
     setSubmitting(true);
+
+    // Validate and sanitize coordinates before sending
+    const sanitizedLat = typeof formData.location.coordinates.lat === 'number' && !isNaN(formData.location.coordinates.lat) 
+      ? formData.location.coordinates.lat 
+      : 0;
+    const sanitizedLng = typeof formData.location.coordinates.lng === 'number' && !isNaN(formData.location.coordinates.lng) 
+      ? formData.location.coordinates.lng 
+      : 0;
 
     // Calculate quality score based on various factors
     const daysUntilExpiry = Math.floor(
       (new Date(formData.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
     );
     const qualityScore = Math.min(95, Math.max(75, 85 + daysUntilExpiry * 2));
-
+    console.log("TOKEN:", getToken());
+    console.log("HEADERS:", authHeader());
     try {
       // Use FormData so we can include an optional image file
       const form = new FormData();
       form.append('hotel_name', formData.hotelName);
-      form.append('food_items', formData.foodItems);
+      form.append('food_items', JSON.stringify(foodItems));
       form.append('quantity', formData.quantity);
       form.append('category', formData.category);
       form.append('expiry_date', formData.expiryDate);
-      form.append('location', JSON.stringify({ address: formData.location.address, coordinates: formData.location.coordinates }));
+      form.append('location', JSON.stringify({ address: formData.location.address, coordinates: { lat: sanitizedLat, lng: sanitizedLng } }));
       form.append('quality_score', String(Math.round(qualityScore)));
       if (imageFile) form.append('image', imageFile);
 
       const headers = { ...(authHeader() as Record<string,string>) };
-
+      console.log("TOKEN:", getToken());
+console.log("HEADERS:", authHeader());
       console.debug('Submitting donation, headers:', headers);
       const res = await fetch(`${API_BASE}/api/donations/create-from-form/`, {
         method: 'POST',
@@ -146,6 +167,17 @@ export function DonationForm({ onSubmit, onCancel }: DonationFormProps) {
     toast.success('Location selected successfully');
   };
 
+  const handleAddItem = () => {
+  if (!currentItem.trim()) return;
+
+  setFoodItems([...foodItems, currentItem.trim()]);
+  setCurrentItem('');
+};
+
+const handleRemoveItem = (index: number) => {
+  setFoodItems(foodItems.filter((_, i) => i !== index));
+};
+
   return (
     <div className="space-y-6">
       {!showLocationPicker ? (
@@ -163,17 +195,46 @@ export function DonationForm({ onSubmit, onCancel }: DonationFormProps) {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="foodItems">Food Items *</Label>
-              <Textarea
-                id="foodItems"
-                placeholder="E.g., Fresh vegetables, fruits, cooked rice, bread..."
-                value={formData.foodItems}
-                onChange={(e) => setFormData({ ...formData, foodItems: e.target.value })}
-                className="min-h-[80px]"
-                required
-              />
-            </div>
+          <div className="space-y-2">
+  <Label>Food Items *</Label>
+
+  {/* Input + Add Button */}
+  <div className="flex gap-2">
+    <Input
+      placeholder="Enter food item (e.g., Rice)"
+      value={currentItem}
+      onChange={(e) => setCurrentItem(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleAddItem();
+        }
+      }}
+    />
+    <Button type="button" onClick={handleAddItem}>
+      Add
+    </Button>
+  </div>
+
+  {/* Display Added Items */}
+  <div className="flex flex-wrap gap-2 mt-2">
+    {foodItems.map((item, index) => (
+      <div
+        key={index}
+        className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full flex items-center gap-2"
+      >
+        {item}
+        <button
+          type="button"
+          onClick={() => handleRemoveItem(index)}
+          className="text-red-500 font-bold"
+        >
+          ×
+        </button>
+      </div>
+    ))}
+  </div>
+</div>
           </div>
 
           {/* Donation Details Section */}
@@ -249,12 +310,12 @@ export function DonationForm({ onSubmit, onCancel }: DonationFormProps) {
                 <div className="flex-1">
                   <p className="text-sm">{formData.location.address}</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Coordinates: {formData.location.coordinates.lat.toFixed(4)}, {formData.location.coordinates.lng.toFixed(4)}
+                    Coordinates: {isNaN(formData.location.coordinates.lat) ? 'N/A' : formData.location.coordinates.lat.toFixed(4)}, {isNaN(formData.location.coordinates.lng) ? 'N/A' : formData.location.coordinates.lng.toFixed(4)}
                   </p>
                 </div>
                 {/* Small map preview that will remount when coordinates change */}
                 <div className="w-40 h-28 rounded overflow-hidden shadow-sm">
-                  {typeof formData.location?.coordinates?.lat === 'number' && typeof formData.location?.coordinates?.lng === 'number' ? (
+                  {typeof formData.location?.coordinates?.lat === 'number' && typeof formData.location?.coordinates?.lng === 'number' && !isNaN(formData.location.coordinates.lat) && !isNaN(formData.location.coordinates.lng) ? (
                     <MapContainer
                       key={`${formData.location.coordinates.lat}-${formData.location.coordinates.lng}`}
                       center={[formData.location.coordinates.lat, formData.location.coordinates.lng]}

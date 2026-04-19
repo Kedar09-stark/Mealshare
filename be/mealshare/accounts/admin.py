@@ -6,6 +6,6 @@ from .models import User
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
 	fieldsets = DjangoUserAdmin.fieldsets + (
-		("Custom", {"fields": ("role",)}),
+		("Custom", {"fields": ("role", "business_license_number", "ngo_registration_number")}),
 	)
-	list_display = ('username', 'email', 'role', 'is_staff', 'is_active')
+	list_display = ('username', 'email', 'role', 'business_license_number', 'ngo_registration_number', 'is_staff', 'is_active')

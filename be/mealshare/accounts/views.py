@@ -1,7 +1,7 @@
 import datetime
 import jwt
 from typing import Tuple, Optional
-
+from .authentication import JWTAuthentication
 from django.conf import settings
 from django.contrib.auth import authenticate
 
@@ -26,37 +26,37 @@ def _make_token(user: User) -> str:
 	return token
 
 
-class JWTAuthentication(authentication.BaseAuthentication):
-	keyword = 'Bearer'
+# class JWTAuthentication(authentication.BaseAuthentication):
+# 	keyword = 'Bearer'
 
-	def authenticate(self, request) -> Optional[Tuple[User, str]]:
-		auth_header = authentication.get_authorization_header(request).split()
-		if not auth_header:
-			return None
+# 	def authenticate(self, request) -> Optional[Tuple[User, str]]:
+# 		auth_header = authentication.get_authorization_header(request).split()
+# 		if not auth_header:
+# 			return None
 
-		if auth_header[0].decode().lower() != self.keyword.lower():
-			return None
+# 		if auth_header[0].decode().lower() != self.keyword.lower():
+# 			return None
 
-		if len(auth_header) == 1:
-			raise AuthenticationFailed('Invalid token header. No credentials provided.')
-		elif len(auth_header) > 2:
-			raise AuthenticationFailed('Invalid token header')
+# 		if len(auth_header) == 1:
+# 			raise AuthenticationFailed('Invalid token header. No credentials provided.')
+# 		elif len(auth_header) > 2:
+# 			raise AuthenticationFailed('Invalid token header')
 
-		token = auth_header[1].decode()
-		try:
-			payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[getattr(settings, 'JWT_ALGORITHM', 'HS256')])
-		except jwt.ExpiredSignatureError:
-			raise AuthenticationFailed('Token has expired')
-		except jwt.InvalidTokenError:
-			raise AuthenticationFailed('Invalid token')
+# 		token = auth_header[1].decode()
+# 		try:
+# 			payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[getattr(settings, 'JWT_ALGORITHM', 'HS256')])
+# 		except jwt.ExpiredSignatureError:
+# 			raise AuthenticationFailed('Token has expired')
+# 		except jwt.InvalidTokenError:
+# 			raise AuthenticationFailed('Invalid token')
 
-		user_id = payload.get('user_id')
-		try:
-			user = User.objects.get(id=user_id)
-		except User.DoesNotExist:
-			raise AuthenticationFailed('User not found')
+# 		user_id = payload.get('user_id')
+# 		try:
+# 			user = User.objects.get(id=user_id)
+# 		except User.DoesNotExist:
+# 			raise AuthenticationFailed('User not found')
 
-		return (user, token)
+# 		return (user, token)
 
 
 class RegisterView(APIView):
@@ -67,6 +67,8 @@ class RegisterView(APIView):
 		email = request.data.get('email')
 		password = request.data.get('password')
 		role = request.data.get('role')
+		business_license_number = request.data.get('businessLicenseNumber')
+		ngo_registration_number = request.data.get('ngoRegistrationNumber')
 
 		if not all([username, password, role]):
 			return Response({'error': 'username, password and role are required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -78,10 +80,23 @@ class RegisterView(APIView):
 		if role not in (User.ROLE_NGO, User.ROLE_HOTEL):
 			return Response({'error': "role must be 'ngo' or 'hotel'"}, status=status.HTTP_400_BAD_REQUEST)
 
+		if role == User.ROLE_HOTEL and not business_license_number:
+			return Response({'error': 'businessLicenseNumber is required for hotel role'}, status=status.HTTP_400_BAD_REQUEST)
+
+		if role == User.ROLE_NGO and not ngo_registration_number:
+			return Response({'error': 'ngoRegistrationNumber is required for ngo role'}, status=status.HTTP_400_BAD_REQUEST)
+
 		if User.objects.filter(username=username).exists():
 			return Response({'error': 'username already taken'}, status=status.HTTP_400_BAD_REQUEST)
 
-		user = User.objects.create_user(username=username, email=email or '', password=password, role=role)
+		user = User.objects.create_user(
+			username=username,
+			email=email or '',
+			password=password,
+			role=role,
+			business_license_number=business_license_number or '',
+			ngo_registration_number=ngo_registration_number or ''
+		)
 
 		token = _make_token(user)
 

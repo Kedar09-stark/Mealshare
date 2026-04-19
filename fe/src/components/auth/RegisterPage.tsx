@@ -17,16 +17,26 @@ export function RegisterPage({ role, onBack, onRegister }: RegisterPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [businessLicenseNumber, setBusinessLicenseNumber] = useState('');
+  const [ngoRegistrationNumber, setNgoRegistrationNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const effectiveRole = role ?? 'ngo';
 
   const handleRegister = () => {
     if (!email || !password || !name || !username) return alert('Please fill all fields');
     if (password !== confirmPassword) return alert('Passwords do not match');
+    if (effectiveRole === 'hotel' && !businessLicenseNumber) return alert('Please enter business license number');
+    if (effectiveRole === 'ngo' && !ngoRegistrationNumber) return alert('Please enter NGO registration number');
     (async () => {
       try {
         setLoading(true);
-        const res = await apiRegister({ username, email, password, role: effectiveRole ?? 'ngo' });
+        const payload: any = { username, email, password, role: effectiveRole ?? 'ngo' };
+        if (effectiveRole === 'hotel') {
+          payload.businessLicenseNumber = businessLicenseNumber;
+        } else if (effectiveRole === 'ngo') {
+          payload.ngoRegistrationNumber = ngoRegistrationNumber;
+        }
+        const res = await apiRegister(payload);
         setAuth(res.token, res.user);
         onRegister(res.user.role as UserRole);
       } catch (err: any) {
@@ -57,6 +67,11 @@ export function RegisterPage({ role, onBack, onRegister }: RegisterPageProps) {
             <AuthForm
               name={name}
               setName={setName}
+              businessLicenseNumber={businessLicenseNumber}
+              setBusinessLicenseNumber={setBusinessLicenseNumber}
+              ngoRegistrationNumber={ngoRegistrationNumber}
+              setNgoRegistrationNumber={setNgoRegistrationNumber}
+              role={effectiveRole}
               username={username}
               setUsername={setUsername}
               email={email}

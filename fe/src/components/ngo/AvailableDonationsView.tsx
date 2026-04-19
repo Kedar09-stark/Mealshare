@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { Donation } from '../../App';
 import { QualityBadge } from '../QualityBadge';
 import { API_BASE, authHeader } from '../../lib/auth';
+import { formatFoodItems } from '../../lib/utils';
 
 interface AvailableDonationsViewProps {
   donations: Donation[];
@@ -26,7 +27,6 @@ export function AvailableDonationsView({ donations, updateDonation }: AvailableD
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<Donation[]>(donations ?? []);
-  const [lastResponseInfo, setLastResponseInfo] = useState<string | null>(null);
 
   const filteredDonations = (items || donations || []).filter(d => {
     const matchesSearch = d.foodItems.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -76,7 +76,19 @@ export function AvailableDonationsView({ donations, updateDonation }: AvailableD
   };
 
   const mapServer = (d: any): Donation => {
-    const loc = d.location ?? d.location_json ?? { address: '', coordinates: { lat: 0, lng: 0 } };
+    let loc = d.location ?? d.location_json ?? { address: '', coordinates: { lat: 0, lng: 0 } };
+    // Validate and sanitize coordinates
+    if (loc && typeof loc === 'object' && loc.coordinates) {
+      const lat = typeof loc.coordinates.lat === 'number' ? loc.coordinates.lat : 0;
+      const lng = typeof loc.coordinates.lng === 'number' ? loc.coordinates.lng : 0;
+      loc = {
+        address: loc.address || '',
+        coordinates: {
+          lat: isNaN(lat) ? 0 : lat,
+          lng: isNaN(lng) ? 0 : lng
+        }
+      };
+    }
     return {
       id: d.id?.toString() ?? Date.now().toString(),
       hotelName: d.hotel_name ?? d.hotelName ?? '',
@@ -106,7 +118,6 @@ export function AvailableDonationsView({ donations, updateDonation }: AvailableD
 
       const status = res.status;
       const text = await res.text();
-      setLastResponseInfo(`status=${status} body=${text?.slice(0,1000)}`);
 
       if (!res.ok) {
         // try to parse JSON error, otherwise include raw text
@@ -194,9 +205,6 @@ export function AvailableDonationsView({ donations, updateDonation }: AvailableD
               {error && (
                 <p className="text-sm text-red-600 mt-2">Error: {error}</p>
               )}
-              {lastResponseInfo && (
-                <p className="text-xs text-gray-400 mt-2">Debug: {lastResponseInfo}</p>
-              )}
             </CardContent>
           </Card>
         </>
@@ -212,7 +220,7 @@ export function AvailableDonationsView({ donations, updateDonation }: AvailableD
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
-                      <CardTitle className="text-lg">{donation.foodItems}</CardTitle>
+                      <CardTitle className="text-lg">{formatFoodItems(donation.foodItems)}</CardTitle>
                       <CardDescription>{donation.hotelName}</CardDescription>
                     </div>
                     <QualityBadge score={donation.qualityScore} />
@@ -228,7 +236,7 @@ export function AvailableDonationsView({ donations, updateDonation }: AvailableD
                   <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
                     <img 
                       src={donation.imageUrl} 
-                      alt={donation.foodItems}
+                      alt={formatFoodItems(donation.foodItems)}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -285,7 +293,7 @@ export function AvailableDonationsView({ donations, updateDonation }: AvailableD
           {selectedDonation && (
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="font-medium">{selectedDonation.foodItems}</p>
+                <p className="font-medium">{formatFoodItems(selectedDonation.foodItems)}</p>
                 <p className="text-sm text-gray-600">{selectedDonation.hotelName}</p>
                 <div className="flex items-center gap-2 mt-2">
                   <MapPin className="h-4 w-4 text-gray-400" />

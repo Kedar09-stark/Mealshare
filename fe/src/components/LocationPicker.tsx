@@ -21,8 +21,17 @@ const PRESET_LOCATIONS = [
 ];
 
 export function LocationPicker({ onSelect, onClose, initialLocation }: LocationPickerProps) {
+  // Validate initialLocation has valid coordinates
+  const validatedInitialLocation = initialLocation && 
+    typeof initialLocation.coordinates.lat === 'number' && 
+    typeof initialLocation.coordinates.lng === 'number' &&
+    !isNaN(initialLocation.coordinates.lat) &&
+    !isNaN(initialLocation.coordinates.lng)
+    ? initialLocation
+    : undefined;
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState(initialLocation);
+  const [selectedLocation, setSelectedLocation] = useState(validatedInitialLocation);
   const [hoveredLocation, setHoveredLocation] = useState<number | null>(null);
   const [searchResults, setSearchResults] = useState<typeof PRESET_LOCATIONS>([]);
   const [searching, setSearching] = useState(false);
@@ -43,10 +52,17 @@ export function LocationPicker({ onSelect, onClose, initialLocation }: LocationP
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&addressdetails=1&limit=8`);
         if (!res.ok) throw new Error('Geocode failed');
         const arr = await res.json();
-        const mapped = arr.map((r: any) => ({ name: r.display_name as string, lat: parseFloat(r.lat), lng: parseFloat(r.lon) }));
+        const mapped = arr
+          .map((r: any) => {
+            const lat = parseFloat(r.lat);
+            const lng = parseFloat(r.lon);
+            // Validate that both coordinates are valid numbers
+            if (isNaN(lat) || isNaN(lng)) return null;
+            return { name: r.display_name as string, lat, lng };
+          })
+          .filter((item): item is { name: string; lat: number; lng: number } => item !== null);
         setSearchResults(mapped);
       } catch (err) {
-        console.error('Geocode error', err);
         setSearchResults([]);
       } finally {
         setSearching(false);
@@ -62,6 +78,11 @@ export function LocationPicker({ onSelect, onClose, initialLocation }: LocationP
   const locationsToShow = (searchQuery.length > 2 || searchResults.length > 0) ? searchResults : filteredPreset;
 
   const handleSelectLocation = (location: typeof PRESET_LOCATIONS[0]) => {
+    // Validate coordinates before setting
+    if (typeof location.lat !== 'number' || typeof location.lng !== 'number' || isNaN(location.lat) || isNaN(location.lng)) {
+      toast.error('Invalid location coordinates');
+      return;
+    }
     setSelectedLocation({
       address: location.name,
       coordinates: { lat: location.lat, lng: location.lng }
@@ -85,6 +106,13 @@ export function LocationPicker({ onSelect, onClose, initialLocation }: LocationP
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
+      
+      // Validate coordinates
+      if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+        toast.error('Invalid geolocation coordinates');
+        return;
+      }
+      
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
         if (res.ok) {
@@ -101,7 +129,6 @@ export function LocationPicker({ onSelect, onClose, initialLocation }: LocationP
         toast.success('Current location detected');
       }
     }, (err) => {
-      console.error('Geolocation error', err);
       toast.error('Unable to retrieve current location');
     });
   };
@@ -185,13 +212,23 @@ export function LocationPicker({ onSelect, onClose, initialLocation }: LocationP
                   (() => {
                     const lat = selectedLocation.coordinates.lat;
                     const lng = selectedLocation.coordinates.lng;
+                    
+                    // Validate coordinates are valid numbers
+                    if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+                      return (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-100 text-sm text-gray-600">
+                          Invalid coordinates. Please select a valid location.
+                        </div>
+                      );
+                    }
+                    
                     const delta = 0.01;
                     const left = lng - delta;
                     const right = lng + delta;
                     const bottom = lat - delta;
                     const top = lat + delta;
                     const bbox = `${left},${bottom},${right},${top}`;
-                    const iframeSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(lat + '%2C' + lng)}`;
+                    const iframeSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(lng + ',' + lat)}`;
                     return (
                       <div className="w-full h-full relative">
                         <iframe

@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Plus, Package, ListChecks, MessageSquare, 
   Building2, Bell, LogOut
 } from 'lucide-react';
+import { getCurrentUser } from '../lib/auth';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from './ui/sidebar';
 import { Donation, DonationRequest, Message } from '../App';
 import { HotelDashboardView } from './hotel/HotelDashboardView';
@@ -38,6 +39,7 @@ export function HotelDashboard({
 }: HotelDashboardProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const currentUser = getCurrentUser();
 
   const pathParts = location.pathname.split('/').filter(Boolean);
   const initial = (pathParts.length >= 2 && pathParts[0] === 'hotel') ? (pathParts[1] as ViewType) : 'dashboard';
@@ -83,8 +85,8 @@ export function HotelDashboard({
               <div className="flex items-center gap-2">
                 <Building2 className="h-8 w-8 text-teal-600" />
                 <div>
-                  <h2 className="text-lg text-sidebar-foreground">FoodShare</h2>
-                  <p className="text-xs text-muted-foreground">Grand Plaza Hotel</p>
+                  <h2 className="text-lg text-sidebar-foreground">MealShare</h2>
+                  <p className="text-xs text-muted-foreground">{currentUser?.username || 'Hotel'}</p>
                 </div>
               </div>
             </div>
